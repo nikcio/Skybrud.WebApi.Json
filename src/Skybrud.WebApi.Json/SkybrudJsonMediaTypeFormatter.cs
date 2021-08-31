@@ -1,22 +1,23 @@
-﻿using System;
-using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Formatting;
-using System.Net.Http.Headers;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Formatters;
+using Microsoft.Net.Http.Headers;
+using System;
+using System.Text;
 using System.Threading.Tasks;
-using System.Web;
 
-namespace Skybrud.WebApi.Json {
+namespace Skybrud.WebApi.Json
+{
 
-    public class SkybrudJsonMediaTypeFormatter : JsonMediaTypeFormatter {
+    public class SkybrudJsonMediaTypeFormatter : TextOutputFormatter {
 
         private string _callbackQueryParameter;
 
-        public SkybrudJsonMediaTypeFormatter() {
-            SupportedMediaTypes.Add(DefaultMediaType);
+        public SkybrudJsonMediaTypeFormatter(HttpContext context) {
+            SupportedMediaTypes.Add(MediaTypeHeaderValue.Parse("text/vcard"));
             SupportedMediaTypes.Add(new MediaTypeHeaderValue("text/javascript"));
-            MediaTypeMappings.Add(new UriPathExtensionMapping("jsonp", DefaultMediaType));
+            Context = context;
+
+            //MediaTypeMappings.Add(new UriPathExtensionMapping("jsonp", DefaultMediaType));
         }
 
         public string CallbackQueryParameter {
@@ -24,25 +25,26 @@ namespace Skybrud.WebApi.Json {
             set { _callbackQueryParameter = value; }
         }
 
-        public override Task WriteToStreamAsync(Type type, object value, Stream stream, HttpContent content, TransportContext context) {
+        public HttpContext Context { get; }
+
+        public override Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding selectedEncoding)
+        {
             string callback;
             if (IsJsonpRequest(out callback)) {
-                return Task.Factory.StartNew(() => {
-                    StreamWriter writer = new StreamWriter(stream);
-                    writer.Write(callback + "(");
-                    writer.Flush();
-                    base.WriteToStreamAsync(type, value, stream, content, context).Wait();
-                    writer.Write(")");
-                    writer.Flush();
+                return Task.Factory.StartNew(async () => {
+                    StringBuilder writer = new();
+                    writer.Append(callback + "()");
+                    await context.HttpContext.Response.WriteAsync(writer.ToString(), selectedEncoding);
+
                 });
             }
-            return base.WriteToStreamAsync(type, value, stream, content, context);
+            return null;
         }
 
         private bool IsJsonpRequest(out string callback) {
             callback = null;
-            if (HttpContext.Current.Request.HttpMethod != "GET") return false;
-            callback = HttpContext.Current.Request.QueryString[CallbackQueryParameter];
+            if (Context.Request.Method != "GET") return false;
+            callback = Context.Request.Query[CallbackQueryParameter];
             return !String.IsNullOrEmpty(callback);
         }
 

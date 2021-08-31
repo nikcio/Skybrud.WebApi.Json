@@ -11,7 +11,7 @@ namespace Skybrud.WebApi.Json.Meta {
         /// <param name="request">The current request.</param>
         /// <param name="response">The meta response object to be returned.</param>
         public static HttpResponseMessage CreateResponse(this HttpRequestMessage request, JsonMetaResponse response) {
-            return request.CreateResponse(response);
+            return request.CreateResponse(response.Meta.Code, response);
         }
 
     }
